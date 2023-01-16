@@ -1,0 +1,61 @@
+#定义流水线全局阶段
+stages:
+  - deploy
+
+variables:
+  APP_NAME: local_test
+  PROJECT_PATH: /opt/www/${APP_NAME}
+  PROJECT_PATH_TEMP: /opt/www/${APP_NAME}_tmp
+
+#发布到测试环境
+deploy to test:
+  stage: deploy
+  # tags ：指定流水线使用哪个runner去运行，只能定义到一个具体的项目，tags的取值范围是该项目可见的runner
+  tags:
+    - test
+  # environment ：部署的环境名称
+  environment:
+    name: test
+  # only ：限定某些分支或者某些tag
+  only:
+    - test
+  # variables : 定义全局变量
+  variables:
+    # 声明一个变量叫 DOT_ENV , ${xx} 引入定义的变量，一般情况env文件的内容可以写在【setting -> ci/cd -> Variables】中，通过${}来获取
+    # 最后由下面的script的脚本来生成.env : echo "${DOT_ENV}" > .env
+    DOT_ENV: ${DOT_ENV_TEST}
+  # 由runner执行的shell脚本（必填项）
+  script:
+    - if [ ! -d "./vendor" ]; then composer install; fi
+    - rm -rf phpunit.xml
+    - rm -rf .git
+    - rm -rf composer.json
+    - rm -rf README.md
+    - echo "${DOT_ENV}" > .env
+    - if [ ! -d "${PROJECT_PATH}" ]; then mkdir -p ${PROJECT_PATH}; fi
+    - if [ -d "${PROJECT_PATH_TEMP}" ]; then rm -rf ${PROJECT_PATH_TEMP}; fi
+    - mv ${PROJECT_PATH} ${PROJECT_PATH_TEMP}
+    - mkdir -p ${PROJECT_PATH}
+    - mv * .[^.]* ${PROJECT_PATH}
+    - rm -rf ${PROJECT_PATH_TEMP}
+    
+
+#发布到生产环境
+deploy to production:
+  stage: deploy
+  tags:
+    - test
+  environment:
+    name: production
+  only:
+    - master
+  variables:
+    DOT_ENV: ${DOT_ENV_MASTER}
+  script:
+    - rm -rf phpunit.xml
+    - rm -rf .git
+    - rm -rf composer.json
+    - rm -rf README.md
+    - echo "${DOT_ENV}" > .env
+    - chmod 755 bin/deploy.sh
+    - bin/deploy.sh prod
